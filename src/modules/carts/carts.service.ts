@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { CreateCartDto } from './dto/create-cart.dto';
-import { Model, Types } from 'mongoose';
+import { ClientSession, Model, Types } from 'mongoose';
 import { InjectModel } from '@nestjs/mongoose';
 import { Product } from '../products/schemas/product.schema';
 import { User } from '../users/schemas/user.schema';
@@ -340,6 +340,24 @@ export class CartsService {
       // trả về lỗi chung
       throw new InternalServerErrorException(
         'Đã có lỗi xảy ra trong quá trình xử lý',
+      );
+    }
+  }
+
+  async clearCartByUserId(userId: string, session: ClientSession) {
+    const result = await this.cartModel.findOneAndUpdate(
+      { userId: userId },
+      {
+        $set: {
+          items: [],
+          totalItems: 0,
+        },
+      },
+      { session },
+    );
+    if (!result) {
+      throw new BadRequestException(
+        'Khong tìm thấy giỏ hàng của người dùng này',
       );
     }
   }

@@ -164,13 +164,11 @@ export class UsersService {
     if (user.isActive) {
       throw new BadRequestException('Account has been activated');
     }
-
     const codeId = uuidv4();
     await user.updateOne({
       codeId: codeId,
       codeExpired: dayjs().add(5, 'minute'),
     });
-
     this.mailerService.sendMail({
       to: user.email, // list of receivers
       subject: 'Testing Nest MailerModule ✔', // Subject line

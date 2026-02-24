@@ -10,6 +10,7 @@ import {
   ProductSchema,
 } from '@/modules/products/schemas/product.schema';
 import { Size, SizeSchema } from '@/modules/sizes/schemas/size.schema';
+import { CartsModule } from '@/modules/carts/carts.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { Size, SizeSchema } from '@/modules/sizes/schemas/size.schema';
       { name: Product.name, schema: ProductSchema },
       { name: Size.name, schema: SizeSchema },
     ]),
+    CartsModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService],
