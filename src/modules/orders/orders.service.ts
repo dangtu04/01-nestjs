@@ -60,10 +60,15 @@ export class OrdersService {
       }
     }
   }
-  async createOrder(userId: string, createOrderDto: CreateOrderDto) {
-    // start session
+
+  async prepareAndCreateOrder(
+    userId: string,
+    createOrderDto: CreateOrderDto,
+    paymentMethod: PaymentMethod,
+    shouldValidateStock: boolean = true,
+    shouldClearCart: boolean = true,
+  ) {
     const session = await this.connection.startSession();
-    // start transaction
     session.startTransaction();
     try {
       if (!Types.ObjectId.isValid(userId)) {
@@ -80,37 +85,35 @@ export class OrdersService {
         throw new BadRequestException('Giỏ hàng trống');
       }
 
-      // giảm số stock trong product theo cart item
-      await this.validateAndDecreaseStock(cart, session);
-      // chuẩn bị items cho order trong schema
+      // validate và giảm stock nếu cần
+      if (shouldValidateStock) {
+        await this.validateAndDecreaseStock(cart, session);
+      }
+
+      // chuẩn bị items cho order
       const items: OrderItem[] = await Promise.all(
         cart.items.map(async (item) => {
           const product = await this.productModel
             .findById(item.productId)
             .select('name slug price');
-          // console.log('>>>>> product: ', product);
           const size = await this.sizeModel
             .findById(item.sizeId)
             .select('code name');
-          // console.log('>>>>> size: ', size);
-          const result = {
+          return {
             productId: product._id,
             productName: product.name,
             productSlug: product.slug,
             price: product.price,
-
             sizeId: size._id,
             sizeCode: size.code,
             sizeName: size.name,
-
             quantity: item.quantity,
             totalPrice: product.price * item.quantity,
           };
-          return result;
         }),
       );
 
-      // chuẩn bị cho delivery trong schema
+      // chuẩn bị delivery
       const delivery = {
         receiverName: createOrderDto.delivery.receiverName,
         receiverPhone: createOrderDto.delivery.receiverPhone,
@@ -118,25 +121,22 @@ export class OrdersService {
         note: createOrderDto.delivery.note,
       };
 
-      // giá tạm tính
+      // tính giá
       const subtotal = items.reduce((acc, item) => acc + item.totalPrice, 0);
-
-      // phí ship
       const shippingFee =
         subtotal >= ShippingConfig.FREE_SHIPPING_THRESHOLD
           ? 0
           : ShippingConfig.DEFAULT_FEE;
-
-      // tổng tiền
       const totalAmount = subtotal + shippingFee;
 
-      // chuẩn bị cho payment trong schema
+      // chuẩn bị payment
       const payment = {
-        method: PaymentMethod.COD,
+        method: paymentMethod,
         status: PaymentStatus.UNPAID,
       };
 
-      await this.orderModel.create(
+      // tạo order
+      const [createdOrder] = await this.orderModel.create(
         [
           {
             userId: user._id,
@@ -152,21 +152,29 @@ export class OrdersService {
         { session },
       );
 
-      // clear cart
-      await this.cartsService.clearCartByUserId(userId, session);
+      // xóa cart nếu cần
+      if (shouldClearCart) {
+        await this.cartsService.clearCartByUserId(userId, session);
+      }
 
-      // console.log('>>>>>>>>> Before commit');
-      // commit transaction
       await session.commitTransaction();
-      // console.log('>>>>>>>>> After commit');
-      return items.map((i) => i.productSlug);
+      return createdOrder;
     } catch (error) {
-      // rollback nếu bị lỗi
       await session.abortTransaction();
       throw error;
     } finally {
-      // end session
       session.endSession();
     }
+  }
+
+  async createOrder(userId: string, createOrderDto: CreateOrderDto) {
+    const order = await this.prepareAndCreateOrder(
+      userId,
+      createOrderDto,
+      PaymentMethod.COD,
+      true, // shouldValidateStock
+      true, // shouldClearCart
+    );
+    return order.items.map((i) => i.productSlug);
   }
 }
