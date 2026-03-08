@@ -31,7 +31,7 @@ export class OrdersService {
     @InjectConnection() private readonly connection: Connection,
   ) {}
 
-  private async validateAndDecreaseStock(
+  async validateAndDecreaseStock(
     cart: Cart,
     session: ClientSession,
   ): Promise<void> {

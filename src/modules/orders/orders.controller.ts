@@ -23,6 +23,8 @@ export class OrdersController {
   @Post()
   @Roles(UserRole.ADMIN, UserRole.USER)
   createOrder(@Request() req, @Body() createOrderDto: CreateOrderDto) {
+    // console.log('>>>>> check call api COD');
+
     const userId = req.user._id;
 
     return this.ordersService.createOrder(userId, createOrderDto);

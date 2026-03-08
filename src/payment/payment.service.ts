@@ -1,13 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Model } from 'mongoose';
-import { InjectModel } from '@nestjs/mongoose';
+import { Connection, Model } from 'mongoose';
+import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { Order } from '@/modules/orders/schemas/order.schema';
 import { PaymentMethod, PaymentStatus } from '@/enum/order.enum';
 import dayjs from 'dayjs';
 import { createHmac } from 'crypto';
 import { OrdersService } from '@/modules/orders/orders.service';
 import { CreateOrderDto } from '@/modules/orders/dto/create-order.dto';
+import { Cart } from '@/modules/carts/schemas/cart.schema';
+import { CartsService } from '@/modules/carts/carts.service';
+import { VNPayReturnDto } from './dto/create-payment.dto';
 @Injectable()
 export class PaymentService {
   private readonly tmnCode: string;
@@ -18,7 +21,11 @@ export class PaymentService {
   constructor(
     private readonly configService: ConfigService,
     @InjectModel(Order.name) private orderModel: Model<Order>,
+    @InjectModel(Cart.name) private cartModel: Model<Cart>,
     private readonly ordersService: OrdersService,
+
+    private readonly cartsService: CartsService,
+    @InjectConnection() private readonly connection: Connection,
   ) {
     this.tmnCode = this.configService.get<string>('VNPAY_TMN_CODE');
     this.hashSecret = this.configService.get<string>('VNPAY_HASH_SECRET');
@@ -45,7 +52,7 @@ export class PaymentService {
       vnp_TmnCode: this.tmnCode,
       vnp_Amount: order.totalAmount * 100,
       vnp_CurrCode: 'VND', // đơn vị tiền tệ
-      vnp_TxnRef: order._id,
+      vnp_TxnRef: order._id.toString(), // order id
       vnp_OrderInfo: `Thanh toan don hang ${order._id}`,
       vnp_OrderType: 'other', // loại hàng hoá
       vnp_Locale: 'vn', // ngôn ngữ gd thanh toán
@@ -89,6 +96,7 @@ export class PaymentService {
     });
   }
   async handleVNPayIpn(query: Record<string, string>) {
+    // console.log('>>>>> check call ipn, query: ', query);
     const { vnp_SecureHash, ...rest } = query;
 
     const vnp_TxnRef = query.vnp_TxnRef;
@@ -106,33 +114,100 @@ export class PaymentService {
       return { RspCode: '97', Message: 'Invalid signature' };
     }
 
-    const order = await this.orderModel.findById(vnp_TxnRef);
+    const session = await this.connection.startSession();
+    session.startTransaction();
 
-    if (!order) {
-      return { RspCode: '01', Message: 'Order not found' };
-    }
+    try {
+      const order = await this.orderModel.findById(vnp_TxnRef).session(session);
 
-    if (order.totalAmount * 100 !== Number(vnp_Amount)) {
-      return { RspCode: '04', Message: 'Invalid amount' };
+      if (!order) {
+        throw new Error('Order not found');
+      }
+
+      if (order.totalAmount * 100 !== Number(vnp_Amount)) {
+        throw new Error('Invalid amount');
+      }
+
+      if (order.payment.status !== PaymentStatus.UNPAID) {
+        await session.commitTransaction();
+        return { RspCode: '02', Message: 'Order already confirmed' };
+      }
+
+      // chỈ xử lý khi thanh toán thành công
+      if (vnp_ResponseCode === '00') {
+        const userId = order.userId.toString();
+
+        const cart = await this.cartModel.findOne({ userId }).session(session);
+
+        if (!cart || cart.items.length === 0) {
+          // log warning nhưng vẫn update PAID để VNPay không retry
+          console.warn('Cart already cleared for order:', vnp_TxnRef);
+        } else {
+          await this.ordersService.validateAndDecreaseStock(cart, session);
+          await this.cartsService.clearCartByUserId(userId, session);
+        }
+
+        order.payment.status = PaymentStatus.PAID;
+        order.payment.transactionId = vnp_TransactionNo;
+      } else {
+        order.payment.status = PaymentStatus.FAILED;
+      }
+
+      await order.save({ session });
+
+      await session.commitTransaction();
+    } catch (error) {
+      await session.abortTransaction();
+      console.error('IPN error:', error);
+      return { RspCode: '99', Message: 'Unknown error' };
+    } finally {
+      session.endSession();
     }
-    if (order.payment.status !== PaymentStatus.UNPAID) {
-      return { RspCode: '02', Message: 'Order already confirmed' };
-    }
-    const paymentStatus =
-      vnp_ResponseCode === '00' ? PaymentStatus.PAID : PaymentStatus.FAILED;
-    await this.updatePaymentStatus(
-      vnp_TxnRef,
-      paymentStatus,
-      vnp_TransactionNo,
-    );
 
     return { RspCode: '00', Message: 'Confirm Success' };
   }
-  //  Nhận params từ VNPay gửi lên (query string)
-  // Verify chữ ký vnp_SecureHash — quan trọng nhất, tránh giả mạo
-  // Kiểm tra vnp_ResponseCode — '00' là thành công
-  // Tìm order theo vnp_TxnRef (chính là order._id)
-  // Kiểm tra số tiền vnp_Amount / 100 khớp với order.totalAmount
-  // Cập nhật payment.status → PAID hoặc FAILED
-  // Trả về { RspCode: '00', Message: 'Confirm Success' } cho VNPay (bắt buộc, VNPay cần response này)
+
+  async handleReturnUrl(query: VNPayReturnDto) {
+    const { vnp_SecureHash, ...rest } = query;
+
+    console.log('>>>>> check call return url, query: ', query);
+    // verify chữ ký
+    const sortedParams = this.sortObject(rest);
+    const signData = new URLSearchParams(sortedParams).toString();
+    const signed = createHmac('sha512', this.hashSecret)
+      .update(Buffer.from(signData, 'utf-8'))
+      .digest('hex');
+
+    if (signed !== vnp_SecureHash) {
+      return { success: false, message: 'Chữ ký không hợp lệ' };
+    }
+
+    const order = await this.orderModel.findById(query.vnp_TxnRef);
+    if (!order) {
+      return { success: false, message: 'Không tìm thấy đơn hàng' };
+    }
+
+    // chờ IPN cập nhật trạng thái
+    let currentOrder = order;
+    let retries = 0;
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY_MS = 800;
+
+    while (
+      currentOrder.payment.status === PaymentStatus.UNPAID &&
+      retries < MAX_RETRIES
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+      currentOrder = await this.orderModel.findOne({
+        orderCode: query.vnp_TxnRef,
+      });
+      retries++;
+    }
+
+    return {
+      success: order.payment.status === PaymentStatus.PAID,
+      orderId: order._id,
+      status: order.payment.status, // trạng thái thanh toán
+    };
+  }
 }
