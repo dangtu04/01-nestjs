@@ -11,7 +11,7 @@ import {
 import { CategoriesService } from './categories.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
-import { Roles } from '@/decorator/customize';
+import { Public, Roles } from '@/decorator/customize';
 import { UserRole } from '@/enum/user.enum';
 
 @Controller('categories')
@@ -55,5 +55,12 @@ export class CategoriesController {
   @Roles(UserRole.ADMIN)
   getAllCategoriesForSelect() {
     return this.categoriesService.getAllCategoriesForSelect();
+  }
+
+  // get danh sách sản phẩm public
+  @Get('public/all')
+  @Public()
+  getAllCategoriesForUser() {
+    return this.categoriesService.getAllCategoriesForUser();
   }
 }

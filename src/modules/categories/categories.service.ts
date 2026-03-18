@@ -232,4 +232,14 @@ export class CategoriesService {
       results,
     };
   }
+
+  async getAllCategoriesForUser() {
+    const results = await this.categoryModel
+      .find({ isActive: true }, '_id name')
+      .lean()
+      .exec();
+    return {
+      results,
+    };
+  }
 }

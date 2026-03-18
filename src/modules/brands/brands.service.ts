@@ -139,4 +139,14 @@ export class BrandsService {
       results,
     };
   }
+
+  async getAllBrandsForUser() {
+    const results = await this.brandModel
+      .find({ isActive: true }, '_id name')
+      .lean()
+      .exec();
+    return {
+      results,
+    };
+  }
 }

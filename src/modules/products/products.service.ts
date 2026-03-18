@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto, UpdateVariantsDto } from './dto/update-product.dto';
-import { Model } from 'mongoose';
+import mongoose, { Model } from 'mongoose';
 import { InjectModel } from '@nestjs/mongoose';
 import { generateUniqueSlug } from '@/helpers/utils';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
@@ -55,8 +55,8 @@ export class ProductsService {
     const { filter, sort } = aqp(query);
     if (filter.current) delete filter.current;
     if (filter.pageSize) delete filter.pageSize;
-    if (!current) current = 1;
-    if (!pageSize) pageSize = 10;
+    if (!current || current < 1) current = 1;
+    if (!pageSize || pageSize > 100) pageSize = 10;
 
     const totalItems = await this.productModel.countDocuments(filter);
     const totalPages = Math.ceil(totalItems / pageSize);
@@ -381,8 +381,8 @@ export class ProductsService {
     filter.status = ProductStatus.Active;
 
     // default pagination
-    if (!current) current = 1;
-    if (!pageSize) pageSize = 10;
+    if (!current || current < 1) current = 1;
+    if (!pageSize || pageSize > 100) pageSize = 10;
 
     const totalItems = await this.productModel.countDocuments(filter);
     const totalPages = Math.ceil(totalItems / pageSize);
@@ -435,6 +435,66 @@ export class ProductsService {
     return {
       product,
       images,
+    };
+  }
+
+  async getAllProductsForUser(
+    query: string,
+    current: number,
+    pageSize: number,
+  ) {
+    const { filter, sort } = aqp(query);
+    if (filter.current) delete filter.current;
+    if (filter.pageSize) delete filter.pageSize;
+    if (!current || current < 1) current = 1;
+    if (!pageSize || pageSize > 100) pageSize = 10;
+    filter.status = ProductStatus.Active;
+
+    const extractFilter = (key: string) => {
+      const val = filter[key];
+      delete filter[key];
+      return val;
+    };
+    const categoryId = extractFilter('categoryId');
+    const brandId = extractFilter('brandId');
+    const minPrice = extractFilter('minPrice');
+    const maxPrice = extractFilter('maxPrice');
+
+    if (categoryId && mongoose.Types.ObjectId.isValid(categoryId)) {
+      filter.categoryIds = categoryId;
+    }
+
+    if (brandId && mongoose.Types.ObjectId.isValid(brandId)) {
+      filter.brandId = brandId;
+    }
+
+    if (minPrice || maxPrice) {
+      filter.price = {
+        ...(minPrice && { $gte: Number(minPrice) }),
+        ...(maxPrice && { $lte: Number(maxPrice) }),
+      };
+    }
+    const totalItems = await this.productModel.countDocuments(filter);
+    const totalPages = Math.ceil(totalItems / pageSize);
+    const skip = (+current - 1) * +pageSize;
+
+    const results = await this.productModel
+      .find(filter)
+      .select('_id name slug price thumbnail.secureUrl')
+      .limit(pageSize)
+      .skip(skip)
+      .sort(sort as any)
+      // .populate('categoryIds', 'name')
+      // .populate('brandId', 'name')
+      .exec();
+    return {
+      meta: {
+        current: current,
+        pageSize: pageSize,
+        pages: totalPages,
+        totals: totalItems,
+      },
+      results,
     };
   }
 }

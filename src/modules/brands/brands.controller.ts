@@ -11,7 +11,7 @@ import {
 import { BrandsService } from './brands.service';
 import { CreateBrandDto } from './dto/create-brand.dto';
 import { UpdateBrandDto } from './dto/update-brand.dto';
-import { Roles } from '@/decorator/customize';
+import { Public, Roles } from '@/decorator/customize';
 import { UserRole } from '@/enum/user.enum';
 
 @Controller('brands')
@@ -55,5 +55,11 @@ export class BrandsController {
   @Roles(UserRole.ADMIN)
   getAllBrandsForSelect() {
     return this.brandsService.getAllBrandsForSelect();
+  }
+
+  @Get('public/all')
+  @Public()
+  getAllBrandsForUser() {
+    return this.brandsService.getAllBrandsForUser();
   }
 }

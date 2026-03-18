@@ -116,4 +116,19 @@ export class ProductsController {
   getProductDetail(@Param('slug') slug: string) {
     return this.productsService.getProductDetail(slug);
   }
+
+  // get danh sách sản phẩm public
+  @Get('public/all')
+  @Public()
+  getAllProductsForUser(
+    @Query() query: string,
+    @Query('current') current: string,
+    @Query('pageSize') pageSize: string,
+  ) {
+    return this.productsService.getAllProductsForUser(
+      query,
+      +current,
+      +pageSize,
+    );
+  }
 }
