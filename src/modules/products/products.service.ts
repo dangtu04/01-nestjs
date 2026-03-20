@@ -438,6 +438,53 @@ export class ProductsService {
     };
   }
 
+  async searchByKeyword(
+    keyword: string,
+    current: number = 1,
+    pageSize: number = 10,
+  ) {
+    // validate input
+    if (!keyword || keyword.trim().length === 0) {
+      throw new BadRequestException('Keyword cannot be empty');
+    }
+    // pagination defaults
+    if (!current || current < 1) current = 1;
+    if (!pageSize || pageSize > 100) pageSize = 10;
+
+    const skip = (current - 1) * pageSize;
+    // build search filter
+    const keywords = keyword.trim().split(/\s+/);
+
+    const regexList = keywords.map((k) => new RegExp(k, 'i'));
+
+    const filter = {
+      status: ProductStatus.Active,
+      $and: regexList.map((regex) => ({
+        $or: [{ name: { $regex: regex } }, { slug: { $regex: regex } }],
+      })),
+    };
+    const totalItems = await this.productModel.countDocuments(filter);
+    const totalPages = Math.ceil(totalItems / pageSize);
+
+    const results = await this.productModel
+      .find(filter)
+      .select('_id name slug price thumbnail.secureUrl')
+      .limit(pageSize)
+      .skip(skip)
+      .sort({ createdAt: -1 })
+      .exec();
+
+    return {
+      meta: {
+        current,
+        pageSize,
+        pages: totalPages,
+        totals: totalItems,
+      },
+      results,
+    };
+  }
+
   async getAllProductsForUser(
     query: string,
     current: number,

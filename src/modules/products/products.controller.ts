@@ -117,6 +117,18 @@ export class ProductsController {
     return this.productsService.getProductDetail(slug);
   }
 
+  // tìm kiếm sản phẩm theo từ khóa
+  @Get('search/keyword')
+  @Public()
+  searchByKeyword(
+    @Query('keyword') keyword: string,
+    @Query('current') current: string,
+    @Query('pageSize') pageSize: string,
+  ) {
+    // console.log('>>>>>>>> keyword: ', keyword);
+    return this.productsService.searchByKeyword(keyword, +current, +pageSize);
+  }
+
   // get danh sách sản phẩm public
   @Get('public/all')
   @Public()
