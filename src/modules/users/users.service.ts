@@ -15,12 +15,14 @@ import { v4 as uuidv4 } from 'uuid';
 import dayjs from 'dayjs';
 import { MailerService } from '@nestjs-modules/mailer';
 import { ResetPasswordAuthDto } from '@/auth/dto/update-auth.dto';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectModel(User.name) private userModel: Model<User>,
     private mailerService: MailerService,
+    private configService: ConfigService,
   ) {}
 
   async isEmailExist(email: string) {
@@ -126,12 +128,20 @@ export class UsersService {
 
   async handleRegister(registerDto: CreateAuthDto) {
     const { name, email, password } = registerDto;
+
+    // check email tồn tại
     const isExist = await this.isEmailExist(email);
     if (isExist) {
       throw new BadRequestException('Email existed');
     }
+
+    // hash password
     const hashPassword = await hashPasswordHelper(password);
+
+    // tạo code kích hoạt
     const codeId = uuidv4();
+
+    // tạo user
     const user = await this.userModel.create({
       name,
       email,
@@ -141,16 +151,23 @@ export class UsersService {
       codeExpired: dayjs().add(5, 'minute'),
     });
 
-    // send email
-    this.mailerService.sendMail({
-      to: user.email, // list of receivers
-      subject: 'Testing Nest MailerModule', // Subject line
+    // lấy biến từ .env
+    const appName = this.configService.get<string>('APP_NAME');
+    const supportEmail = this.configService.get<string>('SUPPORT_EMAIL');
+
+    // gửi email kích hoạt
+    await this.mailerService.sendMail({
+      to: user.email,
+      subject: `Kích hoạt tài khoản - ${appName}`,
       template: 'register.hbs',
       context: {
         name: user.name || user.email,
         activationCode: codeId,
+        appName: appName,
+        supportEmail: supportEmail,
       },
     });
+
     return { _id: user._id };
   }
 
@@ -164,20 +181,28 @@ export class UsersService {
     if (user.isActive) {
       throw new BadRequestException('Account has been activated');
     }
+
     const codeId = uuidv4();
     await user.updateOne({
       codeId: codeId,
       codeExpired: dayjs().add(5, 'minute'),
     });
-    this.mailerService.sendMail({
-      to: user.email, // list of receivers
-      subject: 'Testing Nest MailerModule ✔', // Subject line
+
+    const appName = this.configService.get<string>('APP_NAME');
+    const supportEmail = this.configService.get<string>('SUPPORT_EMAIL');
+
+    await this.mailerService.sendMail({
+      to: user.email,
+      subject: `Kích hoạt tài khoản - ${appName}`,
       template: 'reactivate.hbs',
       context: {
         name: user.name || user.email,
         activationCode: codeId,
+        appName: appName,
+        supportEmail: supportEmail,
       },
     });
+
     return { _id: user._id };
   }
   // xác thực tài khoản

@@ -544,4 +544,40 @@ export class ProductsService {
       results,
     };
   }
+
+  async findByCategoryId(
+    categoryId: string,
+    current: number,
+    pageSize: number,
+  ) {
+    if (!Types.ObjectId.isValid(categoryId)) {
+      throw new BadRequestException('Invalid category ID');
+    }
+
+    const filter = { categoryIds: categoryId, status: ProductStatus.Active };
+
+    if (!current || current < 1) current = 1;
+    if (!pageSize || pageSize > 100) pageSize = 10;
+
+    const totalItems = await this.productModel.countDocuments(filter);
+    const totalPages = Math.ceil(totalItems / pageSize);
+    const skip = (current - 1) * pageSize;
+
+    const results = await this.productModel
+      .find(filter)
+      .select('_id name slug price thumbnail.secureUrl')
+      .limit(pageSize)
+      .skip(skip)
+      .exec();
+
+    return {
+      meta: {
+        current,
+        pageSize,
+        pages: totalPages,
+        totals: totalItems,
+      },
+      results,
+    };
+  }
 }

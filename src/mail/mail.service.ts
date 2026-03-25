@@ -11,7 +11,7 @@ export class MailService {
       text: 'welcome', // plaintext body
       template: 'register.hbs',
       context: {
-        name: 'Đặng Tú',
+        name: '',
         activationCode: 123456,
       },
     });

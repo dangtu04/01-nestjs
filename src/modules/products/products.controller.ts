@@ -143,4 +143,18 @@ export class ProductsController {
       +pageSize,
     );
   }
+
+  @Get('category/:categoryId')
+  @Public()
+  findByCategoryId(
+    @Param('categoryId') categoryId: string,
+    @Query('current') current: string,
+    @Query('pageSize') pageSize: string,
+  ) {
+    return this.productsService.findByCategoryId(
+      categoryId,
+      +current,
+      +pageSize,
+    );
+  }
 }
