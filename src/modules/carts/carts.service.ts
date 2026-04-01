@@ -77,11 +77,19 @@ export class CartsService {
     // đã có sản phẩm trong cart
     if (existingItem) {
       const newQty = existingItem.quantity + quantity;
+
+      // check tồn kho
+      if (newQty > variant.quantity) {
+        throw new BadRequestException('Số lượng vượt quá tồn kho');
+      }
+
+      // check limit hệ thống
       if (newQty > CartLimits.MAX_QUANTITY_PER_ITEM) {
         throw new BadRequestException(
           `Số lượng tối đa cho mỗi sản phẩm là ${CartLimits.MAX_QUANTITY_PER_ITEM}`,
         );
       }
+
       existingItem.quantity = newQty;
     } else {
       if (cart.items.length >= CartLimits.MAX_ITEMS) {

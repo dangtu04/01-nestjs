@@ -59,12 +59,13 @@ export class AuthService {
       access_token: this.jwtService.sign(payload),
     };
   }
-
+  // xác thực id_token
   async verifyGoogleToken(idToken: string) {
     const client = new OAuth2Client(
       this.configService.get<string>('AUTH_GOOGLE_ID'),
     );
 
+    // kiểm tra tính hợp lệ và lấy thông tin user
     const ticket = await client.verifyIdToken({
       idToken,
       audience: this.configService.get<string>('AUTH_GOOGLE_ID'),
@@ -72,26 +73,32 @@ export class AuthService {
 
     const payload = ticket.getPayload();
 
+    // nếu google không trả về payload thì token không hợp lệ
     if (!payload) {
       throw new UnauthorizedException('Invalid token');
     }
 
+    // chỉ cho phép những tài khoản google đã xác minh email
     if (!payload.email_verified) {
-      throw new UnauthorizedException('Email chưa verify');
+      throw new UnauthorizedException('Email chưa xác thực');
     }
 
     return {
       email: payload.email,
-      googleId: payload.sub,
+      googleId: payload.sub, // sub là id duy nhất của user trên google
       name: payload.name,
       // image: payload.picture,
     };
   }
+
   async loginGoogle(id_token: string) {
+    // xác thực id_token với google và lấy thông tin profile
     const googleData = await this.verifyGoogleToken(id_token);
 
+    // tìm user trong db hoặc tạo mới nếu chưa tồn tại
     const user = await this.usersService.findOrCreateGoogleUser(googleData);
 
+    // tạo jwt token nội bộ để trả về cho frontend
     const payload = { email: user.email, _id: user._id, role: user.role };
     return {
       user: {

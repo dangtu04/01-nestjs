@@ -31,6 +31,38 @@ export class AuthController {
     return this.authService.register(registerDto);
   }
 
+  /*  
+  - FE
+    người dùng nhấn "đăng nhập bằng google"
+      next-auth chuyển hướng đến trang xác thực của google 
+      người dùng chọn tài khoản và đồng ý cấp quyền
+      google trả về id_token cho next-auth
+  
+  - next-auth callback jwt
+    phát hiện account.provider === "google"
+      lấy id_token từ account và gửi lên BE
+  
+  - BE - verifyGoogleToken
+    dùng google-auth-library để xác minh id_token trực tiếp với google
+      google xác nhận token hợp lệ và trả về thông tin profile
+      kiểm tra email đã được verify chưa
+  
+  - BE - findOrCreateGoogleUser
+    tìm user theo googleId trong db
+      nếu có: trả về user luôn
+      nếu không có nhưng email đã tồn tại: gắn googleId vào tài khoản cũ rồi trả về
+      nếu hoàn toàn mới: tạo tài khoản mới với accountType = google
+  
+  - BE - loginGoogle
+    ký jwt token nội bộ với thông tin user
+      trả về { user, access_token } cho next-auth
+  
+  - next-auth callback jwt tiếp tục
+    lưu user và access_token vào jwt token
+  
+  - next-auth callback session
+    đưa thông tin user từ token vào session
+  */
   @HttpCode(HttpStatus.OK)
   @Public()
   @Post('login/google')

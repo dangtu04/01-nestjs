@@ -246,14 +246,18 @@ export class UsersService {
       codeId: codeId,
       codeExpired: dayjs().add(5, 'minute'),
     });
+    const appName = this.configService.get<string>('APP_NAME');
+    const supportEmail = this.configService.get<string>('SUPPORT_EMAIL');
 
     this.mailerService.sendMail({
-      to: user.email, // list of receivers
-      subject: 'Testing Nest MailerModule ✔', // Subject line
-      template: 'register.hbs',
+      to: user.email,
+      subject: `Đổi mật khẩu - ${appName}`,
+      template: 'change-password.hbs',
       context: {
         name: user.name || user.email,
         activationCode: codeId,
+        appName: appName,
+        supportEmail: supportEmail,
       },
     });
     return { _id: user._id, email: user.email };
@@ -304,7 +308,6 @@ export class UsersService {
     }
     return updatedUser;
   }
-
   async findOrCreateGoogleUser(data: {
     email: string;
     googleId: string;
@@ -312,13 +315,18 @@ export class UsersService {
   }) {
     const { email, googleId, name } = data;
 
+    // trường hợp 1: user đã từng đăng nhập bằng google trước đó
+    // tìm theo googleId vì đây là định danh duy nhất và bất biến từ google
     let user = await this.userModel.findOne({ googleId });
 
     if (user) return user;
 
+    // trường hợp 2: user đã có tài khoản đăng ký bằng email thủ công
+    // ghép googleId vào tài khoản cũ để hợp nhất hai phương thức đăng nhập
     user = await this.userModel.findOne({ email });
 
     if (user) {
+      // chỉ gán googleId nếu chưa có, tránh ghi đè nếu đã liên kết trước đó
       if (!user.googleId) {
         user.googleId = googleId;
       }
@@ -326,6 +334,7 @@ export class UsersService {
       return user;
     }
 
+    // trường hợp 3: user hoàn toàn mới, tạo tài khoản với accountType là google
     return this.userModel.create({
       email,
       googleId,
