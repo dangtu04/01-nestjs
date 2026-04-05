@@ -8,7 +8,7 @@ async function bootstrap() {
 
   const configService = app.get(ConfigService);
 
-  const port = configService.get('PORT') || 3000;
+  const port = configService.get('PORT');
 
   // set validate
   app.useGlobalPipes(
@@ -30,6 +30,6 @@ async function bootstrap() {
   // set global prefix
   app.setGlobalPrefix('api/v1', { exclude: [''] });
 
-  await app.listen(port);
+  await app.listen(port || 3000);
 }
 bootstrap();
