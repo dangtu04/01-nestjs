@@ -25,7 +25,7 @@ import { join } from 'path';
           rejectUnauthorized: false,
         },
         defaults: {
-          from: '"No Reply" <no-reply@localhost>',
+          from: `"No Reply" <${configService.get<string>('MAIL_USER')}>`,
         },
         // preview: true,
         template: {
