@@ -15,11 +15,14 @@ import { join } from 'path';
           host: 'smtp.gmail.com',
           port: 587,
           // ignoreTLS: true,
-          // secure: false,
+          secure: false,
           auth: {
             user: configService.get<string>('MAIL_USER'),
             pass: configService.get<string>('MAIL_PASSWORD'),
           },
+        },
+        tls: {
+          rejectUnauthorized: false,
         },
         defaults: {
           from: '"No Reply" <no-reply@localhost>',
