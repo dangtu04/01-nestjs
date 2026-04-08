@@ -12,26 +12,20 @@ import { join } from 'path';
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
         transport: {
-          host: 'smtp.gmail.com',
+          host: 'smtp.sendgrid.net',
           port: 587,
           secure: false,
           auth: {
-            user: configService.get<string>('MAIL_USER'),
-            pass: configService.get<string>('MAIL_PASSWORD'),
+            user: 'apikey', // luôn là chữ "apikey"
+            pass: configService.get<string>('SENDGRID_API_KEY'),
           },
-          tls: {
-            rejectUnauthorized: false,
-          },
-          connectionTimeout: 10000, // 10 seconds
-          socketTimeout: 10000, // 10 seconds
         },
         defaults: {
-          from: `"No Reply" <${configService.get<string>('MAIL_USER')}>`,
+          from: `"No Reply" <${configService.get<string>('SENDGRID_MAIL_FROM')}>`,
         },
-        // preview: true,
         template: {
           dir: join(__dirname, 'templates'),
-          adapter: new HandlebarsAdapter(), // or new PugAdapter() or new EjsAdapter()
+          adapter: new HandlebarsAdapter(),
           options: {
             strict: true,
           },
