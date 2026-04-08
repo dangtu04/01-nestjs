@@ -13,16 +13,16 @@ import aqp from 'api-query-params';
 import { CreateAuthDto, VerifyAccountDto } from '@/auth/dto/create-auth.dto';
 import { v4 as uuidv4 } from 'uuid';
 import dayjs from 'dayjs';
-import { MailerService } from '@nestjs-modules/mailer';
 import { ResetPasswordAuthDto } from '@/auth/dto/update-auth.dto';
 import { ConfigService } from '@nestjs/config';
 import { AccountType } from '@/enum/user.enum';
+import { SendgridService } from '@/mail/sendgrid.service';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectModel(User.name) private userModel: Model<User>,
-    private mailerService: MailerService,
+    private sendgridService: SendgridService,
     private configService: ConfigService,
   ) {}
 
@@ -157,7 +157,7 @@ export class UsersService {
     const supportEmail = this.configService.get<string>('SUPPORT_EMAIL');
 
     // gửi email kích hoạt
-    await this.mailerService.sendMail({
+    await this.sendgridService.sendMail({
       to: user.email,
       subject: `Kích hoạt tài khoản - ${appName}`,
       template: 'register.hbs',
@@ -192,7 +192,7 @@ export class UsersService {
     const appName = this.configService.get<string>('APP_NAME');
     const supportEmail = this.configService.get<string>('SUPPORT_EMAIL');
 
-    await this.mailerService.sendMail({
+    await this.sendgridService.sendMail({
       to: user.email,
       subject: `Kích hoạt tài khoản - ${appName}`,
       template: 'reactivate.hbs',
@@ -249,7 +249,7 @@ export class UsersService {
     const appName = this.configService.get<string>('APP_NAME');
     const supportEmail = this.configService.get<string>('SUPPORT_EMAIL');
 
-    this.mailerService.sendMail({
+    await this.sendgridService.sendMail({
       to: user.email,
       subject: `Đổi mật khẩu - ${appName}`,
       template: 'change-password.hbs',
